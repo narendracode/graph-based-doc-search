@@ -1,0 +1,59 @@
+name: nbcc-archive
+
+# Postgres, Redis, and Neo4j are NOT run here — this project uses shared external
+# instances instead of local containers, configured via DATABASE_URL / REDIS_URL /
+# NEO4J_URI in .env:
+#   - Postgres: a dedicated `nbcc_archive` database (with pgvector enabled), isolated
+#     from other projects on that server.
+#   - Redis: a dedicated db index.
+#   - Neo4j: a dedicated instance (Community Edition can't isolate multiple databases
+#     the way Postgres can, so this instance is used exclusively by this project).
+# That keeps this compose file to just the app services and startup fast. See
+# README.md if you'd rather run any of these locally instead.
+
+services:
+  api:
+    build: ../apps/api
+    image: nbcc-archive-api
+    env_file: ../.env
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      STORAGE_DIR: /data/documents
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../apps/api:/app
+      - documents_data:/data/documents
+
+  worker:
+    build: ../apps/api
+    image: nbcc-archive-api
+    env_file: ../.env
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      STORAGE_DIR: /data/documents
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "-m", "api.pipeline.worker"]
+    volumes:
+      - ../apps/api:/app
+      - documents_data:/data/documents
+
+  web:
+    build: ../apps/web
+    env_file: ../.env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+
+volumes:
+  documents_data:
