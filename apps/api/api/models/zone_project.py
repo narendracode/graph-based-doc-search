@@ -27,3 +27,6 @@ class Project(UUIDPKMixin, TimestampMixin, Base):
     user_access: Mapped[list["UserProjectAccess"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    checklist_items: Mapped[list["ChecklistItem"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="ChecklistItem.order_index"
+    )

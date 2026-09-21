@@ -45,13 +45,15 @@ def extract_entities(text: str) -> list[dict]:
     try:
         raw = generate_json(prompt)
         data = json.loads(raw)
-        entities = data.get("entities", [])
+        entities = data.get("entities", []) if isinstance(data, dict) else []
     except (json.JSONDecodeError, KeyError, ValueError):
         return []
 
     cleaned = []
     seen = set()
     for ent in entities:
+        if not isinstance(ent, dict):
+            continue
         etype, name = ent.get("type"), ent.get("name")
         if etype not in ENTITY_TYPES or not isinstance(name, str):
             continue

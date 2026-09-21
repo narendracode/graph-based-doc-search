@@ -55,8 +55,8 @@ make seed                    # bootstraps the super admin, default zone/project,
 
 Once up:
 
-- Web app: http://localhost:3000
-- API docs: http://localhost:8000/docs
+- Web app: http://localhost:3020
+- API docs: http://localhost:8020/docs
 
 Log in with the super admin credentials from `.env` (`SUPERADMIN_USERNAME` /
 `SUPERADMIN_PASSWORD`), or the seeded demo user `zone.northern` / `demo1234` (scoped to

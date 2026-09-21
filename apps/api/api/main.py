@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
-from api.routers import auth, chat, documents, projects, search, users, zones
+from api.routers import auth, chat, document_types, documents, projects, search, users, zones
 
 settings = get_settings()
 
@@ -20,6 +20,7 @@ app.include_router(auth.router)
 app.include_router(zones.router)
 app.include_router(projects.router)
 app.include_router(users.router)
+app.include_router(document_types.router)
 app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(chat.router)

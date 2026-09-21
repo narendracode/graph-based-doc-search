@@ -84,7 +84,7 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-[70vh] flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex h-[70vh] flex-col rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -142,7 +142,7 @@ export function ChatPanel() {
         <button
           onClick={send}
           disabled={!sessionId || sending}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-ink disabled:opacity-50 dark:bg-brand-light dark:text-ink dark:hover:bg-brand"
         >
           Send
         </button>

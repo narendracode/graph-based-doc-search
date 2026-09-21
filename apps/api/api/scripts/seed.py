@@ -1,8 +1,10 @@
-"""Idempotent seed: super admin (from env), default zone/project, and a few sample
-zones/projects/users for the demo story. Run via `make seed`."""
+"""Idempotent seed: super admin (from env), default zone/project, a starter set of
+document types, and a few sample zones/projects/users for the demo story. Run via
+`make seed`."""
 
 from api.config import get_settings
 from api.db import SessionLocal
+from api.models.document_type import DocumentType
 from api.models.user import User, UserRole, UserZoneAccess, UserProjectAccess
 from api.models.zone_project import Project, Zone
 from api.security import hash_password
@@ -20,6 +22,19 @@ SAMPLE_PROJECTS = [
     ("Chennai Housing Board", "CHB"),
     ("Mumbai Coastal Road", "MCR"),
     ("Bengaluru IT Park", "BIP"),
+]
+# A starting taxonomy — document types are otherwise fully admin/user-extensible
+# (see POST /document-types), so this list is just a convenient default, not fixed.
+DEFAULT_DOCUMENT_TYPES = [
+    "Approval",
+    "Contract",
+    "Project Plan",
+    "Invoice",
+    "Agreement",
+    "Environmental Clearance",
+    "Land Title Deed",
+    "Structural Approval",
+    "Other",
 ]
 
 
@@ -52,6 +67,14 @@ def get_or_create_superadmin(db) -> User:
         db.add(user)
         db.flush()
     return user
+
+
+def seed_document_types(db) -> None:
+    for name in DEFAULT_DOCUMENT_TYPES:
+        existing = db.query(DocumentType).filter(DocumentType.name.ilike(name)).first()
+        if existing is None:
+            db.add(DocumentType(name=name))
+    db.flush()
 
 
 def seed_sample_data(db) -> None:
@@ -88,6 +111,7 @@ def main() -> None:
         get_or_create_default_zone(db)
         get_or_create_default_project(db)
         get_or_create_superadmin(db)
+        seed_document_types(db)
         seed_sample_data(db)
         db.commit()
         print("Seed complete.")

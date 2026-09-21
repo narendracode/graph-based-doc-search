@@ -1,6 +1,7 @@
 import uuid
 
-from api.models.document import Document, DocType
+from api.models.document import Document
+from api.models.document_type import DocumentType
 from api.models.sharing import DocumentProjectShare, DocumentShare, DocumentZoneShare
 from api.models.user import User, UserProjectAccess, UserRole, UserZoneAccess
 from api.models.zone_project import Project, Zone
@@ -32,11 +33,18 @@ def _make_user(db) -> User:
     return user
 
 
+def _make_document_type(db) -> DocumentType:
+    doc_type = DocumentType(name=f"Type-{uuid.uuid4().hex[:8]}")
+    db.add(doc_type)
+    db.flush()
+    return doc_type
+
+
 def _make_document(db, zone: Zone, project: Project) -> Document:
     doc = Document(
         filename="test.pdf",
         storage_path="/tmp/test.pdf",
-        doc_type=DocType.other,
+        doc_type_id=_make_document_type(db).id,
         zone_id=zone.id,
         project_id=project.id,
         checksum=uuid.uuid4().hex,

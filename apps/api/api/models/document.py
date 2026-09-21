@@ -14,15 +14,6 @@ from api.models.base import TimestampMixin, UUIDPKMixin
 settings = get_settings()
 
 
-class DocType(str, enum.Enum):
-    approval = "approval"
-    contract = "contract"
-    project_plan = "project_plan"
-    invoice = "invoice"
-    agreement = "agreement"
-    other = "other"
-
-
 class DocumentStatus(str, enum.Enum):
     pending = "pending"
     parsing = "parsing"
@@ -32,12 +23,20 @@ class DocumentStatus(str, enum.Enum):
     failed = "failed"
 
 
+class ReviewStatus(str, enum.Enum):
+    pending_review = "pending_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class Document(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "documents"
 
     filename: Mapped[str] = mapped_column(String(500))
     storage_path: Mapped[str] = mapped_column(String(1000))
-    doc_type: Mapped[DocType] = mapped_column(Enum(DocType, name="doc_type"))
+    doc_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_types.id", ondelete="RESTRICT")
+    )
     checksum: Mapped[str] = mapped_column(String(64), index=True)
 
     zone_id: Mapped[uuid.UUID] = mapped_column(
@@ -62,9 +61,30 @@ class Document(UUIDPKMixin, TimestampMixin, Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    # Set only when this document was uploaded against a specific checklist item —
+    # ordinary archive uploads leave all of these null and are entirely unaffected
+    # by the review workflow. A checklist item can have several documents over time
+    # (one per upload attempt); its status is derived from the most recent one.
+    checklist_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("checklist_items.id", ondelete="SET NULL"), nullable=True
+    )
+    review_status: Mapped[ReviewStatus | None] = mapped_column(
+        Enum(ReviewStatus, name="review_status"), nullable=True
+    )
+    review_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     zone: Mapped["Zone"] = relationship()
     project: Mapped["Project"] = relationship()
-    uploader: Mapped["User"] = relationship()
+    doc_type: Mapped["DocumentType"] = relationship()
+    uploader: Mapped["User"] = relationship(foreign_keys=[uploaded_by])
+    reviewer: Mapped["User"] = relationship(foreign_keys=[reviewed_by])
+    checklist_item: Mapped["ChecklistItem"] = relationship(
+        back_populates="documents", foreign_keys=[checklist_item_id]
+    )
     chunks: Mapped[list["DocumentChunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )

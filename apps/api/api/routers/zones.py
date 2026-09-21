@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from api.db import get_db
 from api.deps import get_current_user, require_super_admin
+from api.models.document import Document
 from api.models.user import User
 from api.models.zone_project import Zone
 from api.schemas.zone_project import ZoneCreate, ZoneOut, ZoneUpdate
@@ -45,3 +46,27 @@ def update_zone(
     db.commit()
     db.refresh(zone)
     return zone
+
+
+@router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_zone(
+    zone_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_super_admin),
+) -> None:
+    zone = db.get(Zone, zone_id)
+    if zone is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Zone not found")
+    if zone.is_default:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "The default zone can't be deleted")
+
+    doc_count = db.query(Document).filter(Document.zone_id == zone_id).count()
+    if doc_count > 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Can't delete this zone — {doc_count} document(s) are still tagged to it. "
+            "Retag or delete them first.",
+        )
+
+    db.delete(zone)  # user access grants and exclusive zone-shares cascade automatically
+    db.commit()

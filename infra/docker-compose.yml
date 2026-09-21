@@ -22,7 +22,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
+      - "8020:8000"
     volumes:
       - ../apps/api:/app
       - documents_data:/data/documents
@@ -45,9 +45,9 @@ services:
     build: ../apps/web
     env_file: ../.env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8020
     ports:
-      - "3000:3000"
+      - "3020:3000"
     volumes:
       - ../apps/web:/app
       - /app/node_modules

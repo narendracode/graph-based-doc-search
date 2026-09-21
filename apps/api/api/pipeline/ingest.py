@@ -72,3 +72,46 @@ def process_document(document_id: str) -> None:
 
 def delete_document_data(document_id: uuid.UUID) -> None:
     graph.delete_document(document_id)
+
+
+def reconcile_orphaned_documents() -> None:
+    """Marks documents stuck mid-pipeline as failed on worker startup.
+
+    If a worker process dies mid-job (container restart, OOM kill, etc.), it's
+    killed outright rather than raising a Python exception — so `process_document`'s
+    own except block, which would normally set status=failed, never runs. The
+    Document row is left frozen in whatever transient status it was in
+    (parsing/embedding/graph_building) forever, since nothing else watches for it.
+
+    A freshly-starting worker process can't have any job legitimately still
+    running in one of those states — they only exist while a worker is actively
+    holding the document — so anything in them at startup must be orphaned from a
+    previous worker instance. "pending" is left alone: the RQ job itself survives
+    in Redis independent of worker process life, so this worker will pick it up
+    normally. This assumes a single worker replica (true for this deployment);
+    running multiple worker processes would need a real per-job liveness check
+    instead of this startup sweep.
+    """
+    db = SessionLocal()
+    try:
+        stuck = (
+            db.query(Document)
+            .filter(
+                Document.status.in_(
+                    [DocumentStatus.parsing, DocumentStatus.embedding, DocumentStatus.graph_building]
+                )
+            )
+            .all()
+        )
+        for document in stuck:
+            logger.warning(
+                "Marking orphaned document %s as failed (was %s)", document.id, document.status
+            )
+            _set_status(
+                db,
+                document,
+                DocumentStatus.failed,
+                "Ingestion was interrupted (worker restarted mid-processing) — re-upload to retry.",
+            )
+    finally:
+        db.close()

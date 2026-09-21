@@ -85,7 +85,7 @@ def _ranked_documents(db: Session, user: User, query: str, limit: int) -> list[d
             {
                 "id": doc.id,
                 "filename": doc.filename,
-                "doc_type": doc.doc_type,
+                "doc_type_name": doc.doc_type.name,
                 "content": content,
                 "score": score,
                 "url": f"/documents/{doc.id}",

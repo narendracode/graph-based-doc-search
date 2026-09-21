@@ -6,11 +6,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from api.db import get_db
-from api.deps import get_current_user
-from api.models.document import Document, DocType, DocumentChunk, DocumentStatus
+from api.deps import get_current_user, require_super_admin
+from api.models.checklist import ChecklistItem
+from api.models.document import Document, DocumentChunk, DocumentStatus, ReviewStatus
+from api.models.document_type import DocumentType
 from api.models.sharing import DocumentProjectShare, DocumentShare, DocumentZoneShare
 from api.models.user import User, UserRole
 from api.models.zone_project import Project, Zone
+from api.schemas.checklist import DocumentReviewCreate, DocumentReviewOut
 from api.schemas.document import (
     ChunkOut,
     DocumentGraph,
@@ -48,9 +51,10 @@ def _default_project(db: Session) -> Project:
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
-    doc_type: DocType = Form(...),
+    doc_type_id: uuid.UUID | None = Form(default=None),
     zone_id: uuid.UUID | None = Form(default=None),
     project_id: uuid.UUID | None = Form(default=None),
+    checklist_item_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
@@ -61,14 +65,46 @@ async def upload_document(
     if project is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Project not found")
 
+    if checklist_item_id is not None:
+        checklist_item = db.get(ChecklistItem, checklist_item_id)
+        if checklist_item is None or checklist_item.project_id != project.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Checklist item not found for the selected project",
+            )
+        # The checklist item defines what type of document is required here — the
+        # uploaded document's type always matches it, regardless of what (if
+        # anything) was submitted in doc_type_id.
+        resolved_doc_type_id = checklist_item.document_type_id
+    else:
+        # A project with a checklist exists specifically to make sure required
+        # paperwork gets tracked — so once it has any items, every upload to it
+        # must be tagged against one. Untracked uploads would defeat the point.
+        has_checklist = (
+            db.query(ChecklistItem.id).filter(ChecklistItem.project_id == project.id).first()
+            is not None
+        )
+        if has_checklist:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "This project has a document checklist — select which checklist item "
+                "this upload satisfies",
+            )
+        if doc_type_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Document type is required")
+        if db.get(DocumentType, doc_type_id) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Document type not found")
+        resolved_doc_type_id = doc_type_id
+
     document = Document(
         filename=file.filename,
         storage_path="",
-        doc_type=doc_type,
+        doc_type_id=resolved_doc_type_id,
         zone_id=zone.id,
         project_id=project.id,
         uploaded_by=user.id,
         checksum="",
+        checklist_item_id=checklist_item_id,
     )
     db.add(document)
     db.flush()  # assign document.id before writing the file
@@ -88,7 +124,7 @@ async def upload_document(
 def list_documents(
     zone_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
-    doc_type: DocType | None = None,
+    doc_type_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[dict]:
@@ -98,15 +134,15 @@ def list_documents(
         query = query.filter(Document.zone_id == zone_id)
     if project_id:
         query = query.filter(Document.project_id == project_id)
-    if doc_type:
-        query = query.filter(Document.doc_type == doc_type)
+    if doc_type_id:
+        query = query.filter(Document.doc_type_id == doc_type_id)
 
     docs = query.order_by(Document.created_at.desc()).all()
     return [
         {
             "id": d.id,
             "filename": d.filename,
-            "doc_type": d.doc_type,
+            "doc_type_name": d.doc_type.name,
             "zone_name": d.zone.name,
             "project_name": d.project.name,
             "status": d.status,
@@ -130,7 +166,8 @@ def _document_out(d: Document) -> dict:
     return {
         "id": d.id,
         "filename": d.filename,
-        "doc_type": d.doc_type,
+        "doc_type_id": d.doc_type_id,
+        "doc_type_name": d.doc_type.name,
         "zone_id": d.zone_id,
         "zone_name": d.zone.name,
         "project_id": d.project_id,
@@ -140,6 +177,11 @@ def _document_out(d: Document) -> dict:
         "uploaded_by": d.uploader.username if d.uploader else None,
         "created_at": d.created_at,
         "last_uploaded_at": d.last_uploaded_at,
+        "checklist_item_id": d.checklist_item_id,
+        "review_status": d.review_status,
+        "review_feedback": d.review_feedback,
+        "reviewed_by": d.reviewer.username if d.reviewer else None,
+        "reviewed_at": d.reviewed_at,
     }
 
 
@@ -188,6 +230,37 @@ def get_status(
     document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> dict:
     return _document_out(_get_document_or_404(db, user, document_id))
+
+
+@router.post("/{document_id}/review", response_model=DocumentReviewOut)
+def review_document(
+    document_id: uuid.UUID,
+    payload: DocumentReviewCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_super_admin),
+) -> dict:
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    if document.checklist_item_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This document isn't linked to a checklist item, so it has nothing to review",
+        )
+
+    document.review_status = ReviewStatus(payload.decision)
+    document.review_feedback = payload.feedback
+    document.reviewed_by = user.id
+    document.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(document)
+    return {
+        "id": document.id,
+        "review_status": document.review_status,
+        "review_feedback": document.review_feedback,
+        "reviewed_by": document.reviewer.username if document.reviewer else None,
+        "reviewed_at": document.reviewed_at,
+    }
 
 
 @router.get("/{document_id}/download")

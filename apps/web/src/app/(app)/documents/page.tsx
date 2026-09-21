@@ -4,11 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import {
-  DOC_TYPES,
   STATUS_LABELS,
   type AutocompleteItem,
-  type DocType,
   type DocumentListItem,
+  type DocumentType,
   type Project,
   type SearchResultItem,
   type Zone,
@@ -60,9 +59,9 @@ function ModeButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+      className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
         active
-          ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+          ? "bg-brand text-white dark:bg-brand-light dark:text-ink"
           : "border border-slate-300 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
       }`}
     >
@@ -75,7 +74,8 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
   const [query, setQuery] = useState("");
   const [zoneId, setZoneId] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [docType, setDocType] = useState<DocType | "">("");
+  const [docTypeId, setDocTypeId] = useState("");
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [suggestions, setSuggestions] = useState<AutocompleteItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[] | null>(null);
@@ -86,16 +86,20 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
   const hasQuery = query.trim().length > 0;
 
   useEffect(() => {
+    api.get<DocumentType[]>("/document-types").then(setDocumentTypes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (hasQuery) return; // filters only apply to browse mode
     const params = new URLSearchParams();
     if (zoneId) params.set("zone_id", zoneId);
     if (projectId) params.set("project_id", projectId);
-    if (docType) params.set("doc_type", docType);
+    if (docTypeId) params.set("doc_type_id", docTypeId);
     api
       .get<DocumentListItem[]>(`/documents?${params.toString()}`)
       .then(setBrowseResults)
       .catch(() => {});
-  }, [zoneId, projectId, docType, hasQuery]);
+  }, [zoneId, projectId, docTypeId, hasQuery]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -181,13 +185,13 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
           </select>
           <select
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-            value={docType}
-            onChange={(e) => setDocType(e.target.value as DocType | "")}
+            value={docTypeId}
+            onChange={(e) => setDocTypeId(e.target.value)}
           >
             <option value="">All types</option>
-            {DOC_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {documentTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
               </option>
             ))}
           </select>
@@ -205,7 +209,7 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
           {(searchResults ?? []).map((r) => (
             <li
               key={r.id}
-              className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+              className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900"
             >
               <div className="mb-1 flex items-center justify-between">
                 <Link
@@ -215,7 +219,7 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
                   {r.filename}
                 </Link>
                 <span className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                  {r.doc_type}
+                  {r.doc_type_name}
                 </span>
               </div>
               <p className="text-sm text-slate-600 line-clamp-3 dark:text-slate-300">{r.snippet}</p>
@@ -224,7 +228,7 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
           ))}
         </ul>
       ) : (
-        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+        <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
           {browseResults.map((d) => (
             <li key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <div>
@@ -235,7 +239,7 @@ function SearchView({ zones, projects }: { zones: Zone[]; projects: Project[] })
                   {d.filename}
                 </Link>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {d.zone_name} • {d.project_name} • {d.doc_type}
+                  {d.zone_name} • {d.project_name} • {d.doc_type_name}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{provenanceText(d)}</p>
               </div>

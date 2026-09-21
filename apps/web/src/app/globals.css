@@ -6,6 +6,56 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+/* NBCC brand tokens — a blueprint-ledger identity: deep engineering-navy ink,
+   a brass/seal amber for brand actions, and dedicated approve/reject "stamp"
+   inks for the checklist review moment. Reserved for brand touches (nav,
+   primary actions, the review stamp) rather than swapped in everywhere, so the
+   accent stays meaningful instead of diluted across the whole app. */
+@theme {
+  --color-ink: #16233f;
+  --color-brand: #b4791f;
+  --color-brand-light: #e3b168;
+  --color-approve: #1f7a4d;
+  --color-approve-light: #59c48c;
+  --color-reject: #a3342f;
+  --color-reject-light: #e2726c;
+}
+
+/* The signature moment: an admin's approve/reject decision rendered like an
+   ink stamp on physical paperwork — the vernacular of the government approval
+   this feature exists to replace. Reserved for that one moment only. */
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: scale(1.4) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-4deg);
+  }
+}
+
+.stamp {
+  display: inline-block;
+  transform: rotate(-4deg);
+  animation: stamp-in 0.25s ease-out;
+  font-family: var(--font-plex-mono);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 4px;
+  padding: 0.15rem 0.6rem;
+  background: color-mix(in srgb, currentcolor 8%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
 }

@@ -1,12 +1,12 @@
 export type UserRole = "super_admin" | "user";
 
-export type DocType =
-  | "approval"
-  | "contract"
-  | "project_plan"
-  | "invoice"
-  | "agreement"
-  | "other";
+// Document types are an admin/user-extensible taxonomy (see DocumentType below),
+// not a fixed set — anyone can add a missing one wherever it's picked.
+export interface DocumentType {
+  id: string;
+  name: string;
+  created_at: string;
+}
 
 export type DocumentStatus =
   | "pending"
@@ -51,7 +51,7 @@ export interface UserDetail extends UserOut {
 export interface DocumentListItem {
   id: string;
   filename: string;
-  doc_type: DocType;
+  doc_type_name: string;
   zone_name: string;
   project_name: string;
   status: DocumentStatus;
@@ -64,7 +64,8 @@ export interface DocumentListItem {
 export interface DocumentOut {
   id: string;
   filename: string;
-  doc_type: DocType;
+  doc_type_id: string;
+  doc_type_name: string;
   zone_id: string;
   zone_name: string;
   project_id: string;
@@ -74,6 +75,11 @@ export interface DocumentOut {
   uploaded_by: string | null;
   created_at: string;
   last_uploaded_at: string;
+  checklist_item_id: string | null;
+  review_status: "approved" | "rejected" | null;
+  review_feedback: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
 }
 
 export interface ShareUser {
@@ -117,7 +123,7 @@ export interface RelatedDocument {
 export interface SearchResultItem {
   id: string;
   filename: string;
-  doc_type: DocType;
+  doc_type_name: string;
   snippet: string;
   score: number;
   url: string;
@@ -156,6 +162,60 @@ export interface DocumentGraph {
   edges: GraphEdge[];
 }
 
+export type ChecklistItemStatus = "not_uploaded" | "pending_review" | "approved" | "rejected";
+export type ProjectChecklistStatus = "no_checklist" | "pending" | "completed";
+
+export interface ChecklistItem {
+  id: string;
+  project_id: string;
+  document_type_id: string;
+  document_type_name: string;
+  description: string | null;
+  order_index: number;
+  created_at: string;
+}
+
+export interface ChecklistDocument {
+  id: string;
+  filename: string;
+  status: DocumentStatus;
+  review_status: "approved" | "rejected" | null;
+  review_feedback: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  url: string;
+}
+
+export interface ChecklistItemWithStatus {
+  id: string;
+  document_type_id: string;
+  document_type_name: string;
+  description: string | null;
+  order_index: number;
+  item_status: ChecklistItemStatus;
+  latest_document: ChecklistDocument | null;
+  documents: ChecklistDocument[];
+}
+
+export interface ProjectChecklist {
+  project_id: string;
+  project_name: string;
+  project_status: ProjectChecklistStatus;
+  project_status_label: string;
+  approved_count: number;
+  total_items: number;
+  items: ChecklistItemWithStatus[];
+}
+
+export const CHECKLIST_ITEM_STATUS_LABELS: Record<ChecklistItemStatus, string> = {
+  not_uploaded: "Not uploaded",
+  pending_review: "Pending review",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
 export interface Citation {
   id: string;
   filename: string;
@@ -175,15 +235,6 @@ export interface ChatSessionOut {
   messages: ChatMessageOut[];
 }
 
-export const DOC_TYPES: { value: DocType; label: string }[] = [
-  { value: "approval", label: "Approval" },
-  { value: "contract", label: "Contract" },
-  { value: "project_plan", label: "Project Plan" },
-  { value: "invoice", label: "Invoice" },
-  { value: "agreement", label: "Agreement" },
-  { value: "other", label: "Other" },
-];
-
 export const STATUS_LABELS: Record<DocumentStatus, string> = {
   pending: "Pending",
   parsing: "Parsing",
@@ -192,3 +243,14 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   completed: "Completed",
   failed: "Failed",
 };
+
+// Parsing (apps/api/api/services/parsing.py) auto-detects format via `unstructured`,
+// so the backend accepts any of these — this list just drives the file picker/dropzone.
+export const ACCEPTED_FILE_TYPES =
+  ".pdf,.docx,.xlsx,.csv,.txt,.pptx,application/pdf," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+  "text/csv,text/plain";
+
+export const ACCEPTED_FILE_TYPES_LABEL = "PDF, Word, Excel, PowerPoint, CSV, or text files";

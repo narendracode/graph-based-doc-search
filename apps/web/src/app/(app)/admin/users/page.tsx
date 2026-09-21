@@ -48,7 +48,7 @@ export default function UsersAdminPage() {
 
       <form
         onSubmit={handleCreate}
-        className="mb-6 flex gap-2 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+        className="mb-6 flex gap-2 rounded-xl border border-slate-200 bg-white shadow-sm p-4 dark:border-slate-800 dark:bg-slate-900"
       >
         <input
           value={username}
@@ -67,14 +67,14 @@ export default function UsersAdminPage() {
         />
         <button
           type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white dark:bg-slate-100 dark:text-slate-900"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-ink dark:bg-brand-light dark:text-ink dark:hover:bg-brand"
         >
           Add
         </button>
       </form>
       {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+      <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
         {users.map((u) => (
           <li key={u.id} className="px-4 py-3 text-sm">
             <div className="flex items-center justify-between">

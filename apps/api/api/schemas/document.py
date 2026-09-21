@@ -3,13 +3,14 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from api.models.document import DocType, DocumentStatus
+from api.models.document import DocumentStatus, ReviewStatus
 
 
 class DocumentOut(BaseModel):
     id: uuid.UUID
     filename: str
-    doc_type: DocType
+    doc_type_id: uuid.UUID
+    doc_type_name: str
     zone_id: uuid.UUID
     zone_name: str
     project_id: uuid.UUID
@@ -19,6 +20,11 @@ class DocumentOut(BaseModel):
     uploaded_by: str | None
     created_at: datetime
     last_uploaded_at: datetime
+    checklist_item_id: uuid.UUID | None = None
+    review_status: ReviewStatus | None = None
+    review_feedback: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -26,7 +32,7 @@ class DocumentOut(BaseModel):
 class DocumentListItem(BaseModel):
     id: uuid.UUID
     filename: str
-    doc_type: DocType
+    doc_type_name: str
     zone_name: str
     project_name: str
     status: DocumentStatus
@@ -50,7 +56,7 @@ class RelatedDocument(BaseModel):
 class SearchResultItem(BaseModel):
     id: uuid.UUID
     filename: str
-    doc_type: DocType
+    doc_type_name: str
     snippet: str
     score: float
     url: str

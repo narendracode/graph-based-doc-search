@@ -4,6 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL, api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import {
   STATUS_LABELS,
   type ChunkOut,
@@ -12,7 +13,8 @@ import {
   type RelatedDocument,
 } from "@/lib/types";
 import { provenanceText } from "@/lib/format";
-import { statusBadgeClass } from "@/lib/status-colors";
+import { reviewStampClass, statusBadgeClass } from "@/lib/status-colors";
+import { ReviewControls } from "@/lib/review-controls";
 import { GraphView } from "./graph-view";
 import { ShareSection } from "./share-section";
 import { RetagControl } from "./retag-control";
@@ -20,6 +22,7 @@ import { RetagControl } from "./retag-control";
 export default function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const [doc, setDoc] = useState<DocumentOut | null>(null);
   const [related, setRelated] = useState<RelatedDocument[]>([]);
   const [chunks, setChunks] = useState<ChunkOut[] | null>(null);
@@ -79,6 +82,12 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
   if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
   if (!doc) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
 
+  // Reviewable once ingestion has settled either way — including "failed", so a
+  // reviewer isn't permanently blocked from rejecting a bad/corrupt upload just
+  // because the pipeline couldn't parse it. Mirrors the same gate on the project
+  // checklist page.
+  const isSettled = doc.status === "completed" || doc.status === "failed";
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link
@@ -87,16 +96,54 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
       >
         ← Back to search
       </Link>
-      <div className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{doc.filename}</h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{doc.doc_type}</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{doc.doc_type_name}</p>
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{provenanceText(doc)}</p>
             <RetagControl doc={doc} onUpdated={setDoc} />
           </div>
           <StatusBadge status={doc.status} detail={doc.status_detail} />
         </div>
+
+        {doc.checklist_item_id && (
+          <div className="mb-4 rounded-md bg-slate-50 p-3 text-sm dark:bg-slate-800/50">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-slate-600 dark:text-slate-300">
+                This document is uploaded against a project checklist item.{" "}
+                <Link href={`/projects/${doc.project_id}`} className="hover:underline">
+                  View the checklist
+                </Link>
+                .
+              </p>
+              {doc.review_status && (
+                <span className={reviewStampClass(doc.review_status)}>{doc.review_status}</span>
+              )}
+            </div>
+            {doc.review_status === "approved" && (
+              <p className="mt-1 text-slate-500 dark:text-slate-400">
+                Approved{doc.reviewed_by ? ` by ${doc.reviewed_by}` : ""}
+              </p>
+            )}
+            {doc.review_status === "rejected" && (
+              <p className="mt-1 text-slate-500 dark:text-slate-400">
+                Rejected{doc.reviewed_by ? ` by ${doc.reviewed_by}` : ""}
+                {doc.review_feedback ? `: ${doc.review_feedback}` : ""}
+              </p>
+            )}
+            {doc.review_status === null && (
+              <p className="mt-1 text-amber-600 dark:text-amber-400">
+                {isSettled
+                  ? "Awaiting admin review"
+                  : `Still ${doc.status} — not ready for review yet`}
+              </p>
+            )}
+            {isSettled && doc.review_status === null && user?.role === "super_admin" && (
+              <ReviewControls documentId={doc.id} onReviewed={load} />
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <a
@@ -139,7 +186,7 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
             Related documents
           </h2>
-          <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+          <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
             {related.map((r) => (
               <li key={r.id} className="px-4 py-3 text-sm">
                 <Link
@@ -166,13 +213,13 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
             Extracted data — what NBCC Archive pulled out of this document
           </h2>
-          <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex gap-1 border-b border-slate-200 p-2 dark:border-slate-800">
               <button
                 onClick={() => setExtractionTab("graph")}
                 className={`rounded-md px-3 py-1 text-xs font-medium ${
                   extractionTab === "graph"
-                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                    ? "bg-brand text-white dark:bg-brand-light dark:text-ink"
                     : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                 }`}
               >
@@ -182,7 +229,7 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
                 onClick={() => setExtractionTab("chunks")}
                 className={`rounded-md px-3 py-1 text-xs font-medium ${
                   extractionTab === "chunks"
-                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                    ? "bg-brand text-white dark:bg-brand-light dark:text-ink"
                     : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                 }`}
               >
