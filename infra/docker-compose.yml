@@ -26,6 +26,7 @@ services:
     volumes:
       - ../apps/api:/app
       - documents_data:/data/documents
+    restart: unless-stopped
 
   worker:
     build: ../apps/api
@@ -40,12 +41,17 @@ services:
     volumes:
       - ../apps/api:/app
       - documents_data:/data/documents
+    restart: unless-stopped
 
   web:
     build: ../apps/web
     env_file: ../.env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8020
+      # Interpolated by `docker compose --env-file .env ...` (see Makefile's
+      # COMPOSE var) from NEXT_PUBLIC_API_URL in .env — this is what a visitor's
+      # *browser* calls, so it must be the deployment's real host, not always
+      # localhost. Local dev's .env already sets this to http://localhost:8020.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     ports:
       - "3020:3000"
     volumes:
@@ -54,6 +60,7 @@ services:
       - /app/.next
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   documents_data:

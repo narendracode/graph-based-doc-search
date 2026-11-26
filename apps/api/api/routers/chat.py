@@ -13,6 +13,12 @@ from api.services.rag_chat import answer
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# Resending the whole session on every turn makes the prompt (and therefore
+# latency, and truncation risk against CHAT_NUM_CTX) grow without bound over a
+# long conversation — the last few turns give the model enough to handle a
+# natural follow-up question without that.
+MAX_HISTORY_MESSAGES = 6
+
 
 def _message_out(db: Session, m: ChatMessage) -> dict:
     citations = []
@@ -64,7 +70,10 @@ def post_message(
     db.add(ChatMessage(session_id=session.id, role=MessageRole.user, content=payload.content))
     db.commit()
 
-    history = [{"role": m.role.value, "content": m.content} for m in session.messages[:-1]]
+    history = [
+        {"role": m.role.value, "content": m.content}
+        for m in session.messages[:-1][-MAX_HISTORY_MESSAGES:]
+    ]
     reply_text, cited_ids = answer(db, user, history, payload.content)
 
     reply = ChatMessage(

@@ -8,3 +8,4 @@ node_modules/
 apps/web/.next/
 apps/web/node_modules/
 .DS_Store
+nbcc-archive-deploy-*.tar.gz

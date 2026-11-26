@@ -79,6 +79,19 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  async function handleRetry() {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.post<DocumentOut>(`/documents/${id}/retry`);
+      setDoc(updated);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Retry failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
   if (!doc) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
 
@@ -106,6 +119,12 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
           </div>
           <StatusBadge status={doc.status} detail={doc.status_detail} />
         </div>
+
+        {doc.status === "failed" && doc.status_detail && (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {doc.status_detail}
+          </p>
+        )}
 
         {doc.checklist_item_id && (
           <div className="mb-4 rounded-md bg-slate-50 p-3 text-sm dark:bg-slate-800/50">
@@ -152,6 +171,15 @@ export default function DocumentDetailPage({ params }: { params: Promise<{ id: s
           >
             Download
           </a>
+          {doc.status === "failed" && (
+            <button
+              onClick={handleRetry}
+              disabled={busy}
+              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-ink disabled:opacity-50 dark:bg-brand-light dark:text-ink dark:hover:bg-brand"
+            >
+              Retry
+            </button>
+          )}
           <button
             onClick={() => reuploadRef.current?.click()}
             disabled={busy}

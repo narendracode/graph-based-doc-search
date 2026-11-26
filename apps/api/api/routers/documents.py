@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -600,6 +601,32 @@ async def reupload_document(
     document.status_detail = None
     document.uploaded_by = user.id
     document.last_uploaded_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(document)
+
+    ingestion_queue.enqueue("api.pipeline.ingest.process_document", str(document.id))
+    return _document_out(document)
+
+
+@router.post("/{document_id}/retry", response_model=DocumentOut)
+def retry_document(
+    document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    """Re-runs the ingestion pipeline on the file already on disk — for a failure
+    that had nothing to do with the file itself (Ollama was unreachable, Neo4j was
+    down, a transient error), there's no reason to make the uploader pick the same
+    file again. `reupload` stays the path for when the file itself needs replacing."""
+    document = _get_document_or_404(db, user, document_id)
+    if document.status != DocumentStatus.failed:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a failed document can be retried")
+    if not os.path.exists(document.storage_path):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The original file is no longer on disk — use Re-upload instead of Retry",
+        )
+
+    document.status = DocumentStatus.pending
+    document.status_detail = None
     db.commit()
     db.refresh(document)
 

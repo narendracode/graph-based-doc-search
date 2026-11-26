@@ -22,6 +22,13 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
+    # Must be unique per deployment when multiple environments share the same
+    # Redis instance (e.g. local dev and an EC2 deployment both pointed at the
+    # same shared dev Redis) — otherwise both workers listen on the identical
+    # queue, and whichever one happens to be idle grabs a job regardless of
+    # which environment actually wrote the uploaded file to its own local
+    # disk, producing "no such file" failures on whichever side lost the race.
+    queue_name: str = "ingestion"
 
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
